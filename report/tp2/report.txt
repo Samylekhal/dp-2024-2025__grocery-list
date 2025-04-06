@@ -1,0 +1,30 @@
+But:
+Reprendre le projet du TP1 en y incorporant cette fois-ci une option de catégorie pour
+la liste de course via la commande -category
+
+Modification des Classes:
+- Main: aucun changement
+- MyOptions: ajout de l'option catégorie et de la variable éponyme (initialiser en "default).
+Couple à l'ajout d'un getter et un setter pour la catégorie
+
+- Groceries services: (le plus gros du travail)
+    - ajout de la commande "delete" supprimant un fichier (pour une meilleure gestion)
+    - Modification du fonctionnement des commandes pour les rendre compatible avec 
+    l'ajout de la catégorie.
+        - add: le code de la commande add et des autres commandes de manière générale 
+        ont été modifié de sorte à gérer la fonction différemment en fonction du type de 
+        fichier. Pour les csv le code se contente d'ajouter une nouvelle ligne mais pour
+        les json il crée une nouvelle HashMap pour récupérer les informations du fichier,
+        y ajoute les nouveaux articles et réécris en suite le fichier.
+
+        - list: modification de l'affichage de la liste, le fichier est analysé et la liste tri les
+        articles dans une liste en fonction de leur catégorie pour ensuite les afficher
+        
+        - remove: Pour le csv, remove supprime toutes les lignes ayant dans sa première colonne
+        le nom de l'article. En json on place les données dans une map et on se débarasse des 
+        articles voulus avec un filtre avant de recréer la liste.
+    - Nouveaux test unitaires sur GroceryServiceTest 
+
+Erreurs rencontrer: Problème de typo résolus, difficultés à transitionner sur vscode, 
+fonction remove inefficace mais la solution fut trouver via des Systemoutprintln de debug,
+erreur sur les test unitaires liés à la mise à jour du code. 
