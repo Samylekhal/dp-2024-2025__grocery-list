@@ -16,6 +16,7 @@ public class MyOptions {
     private String category = "default"; // Default category is "default"
     private String command;
     private List<String> commandArgs;
+    private boolean isInfoCommand = false;
 
     public MyOptions() {
         this.options = new Options();
@@ -27,13 +28,28 @@ public class MyOptions {
         options.addRequiredOption("s", "source", true, "File containing the grocery list");
         options.addOption("f", "format", true, "Format of the file containing the list (json or csv)");
         options.addOption("c", "category", true, "Category of the item to add");
+        options.addOption("i", "info", false, "Display information about the program");
     }
 
     public boolean parse(String[] args) {
         try {
             CommandLine cmd = parser.parse(options, args);
+            
+            // Vérifier d'abord si c'est une commande info
+            List<String> positionalArgs = cmd.getArgList();
+            if (!positionalArgs.isEmpty() && "info".equals(positionalArgs.get(0))) {
+                command = "info";
+                commandArgs = positionalArgs.subList(1, positionalArgs.size());
+                isInfoCommand = true;
+                
+                // Pour info, on utilise des valeurs par défaut pour les options requises
+                sourceFile = "groceries.json";
+                return true;
+            }
+            
+            // Sinon, comportement normal pour les autres commandes
             sourceFile = cmd.getOptionValue("s");
-    
+            
             // Format est optionnel
             if (cmd.hasOption("f")) {
                 format = cmd.getOptionValue("f").toLowerCase();
@@ -42,15 +58,17 @@ public class MyOptions {
             if (cmd.hasOption("c")) {
                 category = cmd.getOptionValue("c").toLowerCase();
             }
+
+            if (cmd.hasOption("i")) {
+                System.out.println("Use 'info' command instead of -i option for program information.");
+                return false;
+            }
     
             // Ajoute l'extension si elle manque
             if (!(sourceFile.endsWith(".json") || sourceFile.endsWith(".csv"))) {
                 sourceFile += "." + format;
             }
-
-
     
-            List<String> positionalArgs = cmd.getArgList();
             if (positionalArgs.isEmpty()) {
                 System.err.println("Missing Command");
                 return false;
@@ -61,6 +79,17 @@ public class MyOptions {
     
             return true;
         } catch (ParseException ex) {
+            // Vérifier si la commande est 'info' avant de retourner une erreur
+            for (String arg : args) {
+                if ("info".equals(arg)) {
+                    command = "info";
+                    commandArgs = List.of();
+                    isInfoCommand = true;
+                    sourceFile = "groceries.json";
+                    return true;
+                }
+            }
+            
             System.err.println("Fail to parse arguments: " + ex.getMessage());
             return false;
         }
@@ -88,5 +117,9 @@ public class MyOptions {
 
     public List<String> getCommandArgs() {
         return commandArgs;
+    }
+    
+    public boolean isInfoCommand() {
+        return isInfoCommand;
     }
 }

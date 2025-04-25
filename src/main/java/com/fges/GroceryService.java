@@ -8,7 +8,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,7 +20,7 @@ public class GroceryService {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private final String fileName;
     private final String format;
-    private final String category ;
+    private final String category;
 
     public GroceryService(String fileName, String format, String category) {
         this.fileName = fileName;
@@ -60,7 +62,7 @@ public class GroceryService {
     public int executeCommand(String command, List<String> args) throws IOException {
 
         switch (command) {
-                        case "add" -> {
+            case "add" -> {
                 // Vérification des arguments : on ne considère que l'article et la quantité.
                 if (args.size() < 2) {
                     System.err.println("Missing arguments. Usage: add <item_name> <quantity>");
@@ -264,6 +266,23 @@ public class GroceryService {
                     System.err.println("File not found: " + fileName);
                     return 1;
                 }
+            }
+
+            case "info" -> {
+                // Récupération et affichage de la date actuelle
+                SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+                String currentDate = dateFormat.format(new Date());
+                System.out.println("Date: " + currentDate);
+                
+                // Récupération et affichage du système d'exploitation
+                String osName = System.getProperty("os.name");
+                System.out.println("Operating System: " + osName);
+                
+                // Récupération et affichage de la version de Java
+                String javaVersion = System.getProperty("java.version");
+                System.out.println("Java Version: " + javaVersion);
+                
+                return 0;
             }
 
             default -> {
