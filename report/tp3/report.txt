@@ -1,0 +1,18 @@
+But:
+Incorporer la commande "info" dans le tp et suivre les conseils du professeur en séparant le travail 
+fourni dans GroceryServices.java en dans plusieurs petites classes pour éviter de créer un god object.
+
+Modification:
+- ajout de la classe "info" dans MyOptions et autrefois GroceryServices à l'aide des librairies system et SimpleDateFormat.
+
+- Suppression de GroceryServices, remplacer par deux packages commands et storage, l'un visant à exécuter les commande de manière et séparer
+et l'autre gérant l'enregistrement des fichers json et csv.
+- Légère modification de main.java en lui implémentant les nouveaux packages et en remplaçant les références de GroceryServices par les packages
+
+
+
+Erreurs rencontrées : 
+- plusieurs tests unitaires ont dû être refaits à cause du changement de l'arborescence du projet. Résultant du
+remplacement de GroceryServiceTest par GroceryCommandTest
+- il a fallu un long moment de réflexions pour la création de ses packages l'idée de base étant de tout rassembler en un seul, pour plus de 
+simplicité, le stockage et les commandes ont alors été traité comme deux entités distinctes. 

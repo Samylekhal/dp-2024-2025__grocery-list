@@ -1,5 +1,7 @@
 package com.fges;
 
+import com.fges.commands.CommandFactory;
+import com.fges.commands.CommandInterface;
 import java.io.IOException;
 
 public class Main {
@@ -15,14 +17,21 @@ public class Main {
         }
 
         try {
-            //on instancie le sevice
-            GroceryService service = new GroceryService(
+            // Créer la commande appropriée via la factory
+            CommandInterface command = CommandFactory.createCommand(
+                    options.getCommand(),
                     options.getSourceFile(),
                     options.getFormat(),
                     options.getCategory()
             );
-
-            return service.executeCommand(options.getCommand(), options.getCommandArgs());
+            
+            if (command == null) {
+                System.err.println("Unknown command: " + options.getCommand());
+                return 1;
+            }
+            
+            // Exécuter la commande
+            return command.execute(options.getCommandArgs());
 
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());
