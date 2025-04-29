@@ -1,12 +1,27 @@
 package com.fges;
 
+import fr.anthonyquere.GroceryShopServer;
+import fr.anthonyquere.MyGroceryShop;
+
 import com.fges.commands.CommandFactory;
 import com.fges.commands.CommandInterface;
 import java.io.IOException;
 
 public class Main {
     public static void main(String[] args) throws IOException {
-        System.exit(exec(args));
+        MyGroceryShop groceryShop = new SimpleGroceryShop();
+        GroceryShopServer server = new GroceryShopServer(groceryShop);
+        server.start(8080);
+
+        //System.exit(exec(args));
+
+        try {
+            Thread.currentThread().join();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+
     }
 
     public static int exec(String[] args) throws IOException {
