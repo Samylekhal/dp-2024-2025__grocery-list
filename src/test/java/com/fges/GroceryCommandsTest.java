@@ -1,9 +1,22 @@
 package com.fges;
 
-import com.fges.commands.*;
-import com.fges.storage.CsvStorage;
-import com.fges.storage.JsonStorage;
-import com.fges.storage.StorageInterface;
+import com.fges.commands.AddItemCommand;
+import com.fges.repository.GroceryRepositoryFactory;
+import com.fges.commands.DeleteFileCommand;
+import com.fges.commands.RemoveItemCommand;
+import com.fges.core.CommandBus;
+import com.fges.core.QueryBus;
+import com.fges.handlers.AddItemCommandHandler;
+import com.fges.handlers.DeleteFileCommandHandler;
+import com.fges.handlers.InfoQueryHandler;
+import com.fges.handlers.ListItemsQueryHandler;
+import com.fges.handlers.RemoveItemCommandHandler;
+import com.fges.queries.InfoQuery;
+import com.fges.queries.ListItemsQuery;
+import com.fges.repository.GroceryRepository;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -12,328 +25,151 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.*;
 
-class GroceryCommandsTest {
+public class GroceryCommandsTest {
 
-    @TempDir
-    Path tempDir;
+    private final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
+    private final ByteArrayOutputStream errContent = new ByteArrayOutputStream();
+    private final PrintStream originalOut = System.out;
+    private final PrintStream originalErr = System.err;
+    private Path tempFilePath;
+    private GroceryRepository repository;
 
-    @Test
-    void should_load_items_from_json_category() throws IOException {
-        // arrange
-        Path jsonFile = tempDir.resolve("test.json");
-        String jsonContent = """
-                {
-                    "default": ["Milk, 10", "Bread, 2"]
-                }
-                """;
-        Files.writeString(jsonFile, jsonContent);
-
-        StorageInterface storage = new JsonStorage(jsonFile.toString());
-        CommandInterface listCommand = new ListCommand(storage);
-
-        // Capture system output
-        ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-        PrintStream originalOut = System.out;
+    @BeforeEach
+    public void setUpStreams() {
         System.setOut(new PrintStream(outContent));
+        System.setErr(new PrintStream(errContent));
+    }
 
-        // act
-        int result = listCommand.execute(List.of());
+    @BeforeEach
+    public void initializeRepository(@TempDir Path tempDir) throws IOException {
+        tempFilePath = tempDir.resolve("groceries.json");
+        Files.createFile(tempFilePath);
 
-        // restore output
+        // Initialiser le repository avec un fichier temporaire
+        repository = repository = GroceryRepositoryFactory.createRepository(tempFilePath.toString(), "json");
+
+
+        // Enregistrer les handlers pour les commandes et requêtes
+        CommandBus.register(AddItemCommand.class, new AddItemCommandHandler(repository));
+        CommandBus.register(RemoveItemCommand.class, new RemoveItemCommandHandler(repository));
+        CommandBus.register(DeleteFileCommand.class, new DeleteFileCommandHandler(repository));
+        QueryBus.register(ListItemsQuery.class, new ListItemsQueryHandler(repository));
+        QueryBus.register(InfoQuery.class, new InfoQueryHandler());
+    }
+
+    @AfterEach
+    public void restoreStreams() {
         System.setOut(originalOut);
+        System.setErr(originalErr);
+    }
 
-        // assert
-        assertThat(result).isEqualTo(0);
-        assertThat(outContent.toString()).contains("Milk, 10", "Bread, 2");
+    @AfterEach
+    public void cleanUp() throws IOException {
+        Files.deleteIfExists(tempFilePath);
     }
 
     @Test
-    void should_load_items_from_csv() throws IOException {
-        Path csvFile = tempDir.resolve("test.csv");
-        Files.writeString(csvFile, "article,nombre,categorie\nMilk,10,default\nBread,2,default");
+    public void testAddItems() throws Exception {
+        // Ajouter un article
+        AddItemCommand addCommand = new AddItemCommand("Milk", 2, "dairy");
+        int result = CommandBus.dispatch(addCommand);
+        assertEquals(0, result);
 
-        StorageInterface storage = new CsvStorage(csvFile.toString());
-        CommandInterface listCommand = new ListCommand(storage);
-
-        // Capture system output
-        ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-        PrintStream originalOut = System.out;
-        System.setOut(new PrintStream(outContent));
-
-        // act
-        int result = listCommand.execute(List.of());
-
-        // restore output
-        System.setOut(originalOut);
-
-        // assert
-        assertThat(result).isEqualTo(0);
-        assertThat(outContent.toString()).contains("Milk, 10", "Bread, 2");
+        // Vérifier que l'article a été ajouté
+        ListItemsQuery listQuery = new ListItemsQuery();
+        result = QueryBus.dispatch(listQuery);
+        assertEquals(0, result);
+        assertTrue(outContent.toString().contains("Milk"));
+        assertTrue(outContent.toString().contains("dairy"));
     }
 
     @Test
-    void should_add_item_to_json_with_category() throws IOException {
-        Path jsonFile = tempDir.resolve("test.json");
-        Files.writeString(jsonFile, "{}");
-
-        StorageInterface storage = new JsonStorage(jsonFile.toString());
-        CommandInterface addCommand = new AddCommand(storage, "snacks");
-
-        int result = addCommand.execute(List.of("Chips", "5"));
-
-        assertThat(result).isEqualTo(0);
-
-        String content = Files.readString(jsonFile);
-        assertThat(content).contains("Chips, 5");
-        assertThat(content).contains("snacks");
+    public void testListEmptyList() throws Exception {
+        // Tester la liste quand elle est vide
+        ListItemsQuery listQuery = new ListItemsQuery();
+        int result = QueryBus.dispatch(listQuery);
+        assertEquals(0, result);
+        assertTrue(outContent.toString().contains("No items found"));
     }
 
     @Test
-    void should_add_item_to_csv_with_category() throws IOException {
-        Path csvFile = tempDir.resolve("test.csv");
+    public void testRemoveItem() throws Exception {
+        // Ajouter un article
+        AddItemCommand addCommand = new AddItemCommand("Bread", 1, "bakery");
+        int result = CommandBus.dispatch(addCommand);
+        assertEquals(0, result);
 
-        StorageInterface storage = new CsvStorage(csvFile.toString());
-        CommandInterface addCommand = new AddCommand(storage, "snacks");
+        // Vider le contenu de sortie pour le prochain test
+        outContent.reset();
 
-        int result = addCommand.execute(List.of("Chips", "5"));
+        // Supprimer l'article
+        RemoveItemCommand removeCommand = new RemoveItemCommand("Bread");
+        result = CommandBus.dispatch(removeCommand);
+        assertEquals(0, result);
 
-        assertThat(result).isEqualTo(0);
-        assertThat(Files.exists(csvFile)).isTrue();
-
-        List<String> lines = Files.readAllLines(csvFile);
-        assertThat(lines).contains("article,nombre,categorie", "Chips,5,snacks");
+        // Vérifier que l'article a été supprimé
+        outContent.reset();
+        ListItemsQuery listQuery = new ListItemsQuery();
+        result = QueryBus.dispatch(listQuery);
+        assertEquals(0, result);
+        assertTrue(outContent.toString().contains("No items found"));
     }
 
     @Test
-    void should_remove_item_from_json() throws IOException {
-        Path jsonFile = tempDir.resolve("test.json");
-        String jsonContent = """
-                {
-                    "default": ["Milk, 10", "Bread, 2"]
-                }
-                """;
-        Files.writeString(jsonFile, jsonContent);
+    public void testDeleteFile() throws Exception {
+        // Ajouter un article
+        AddItemCommand addCommand = new AddItemCommand("Cheese", 1, "dairy");
+        int result = CommandBus.dispatch(addCommand);
+        assertEquals(0, result);
 
-        StorageInterface storage = new JsonStorage(jsonFile.toString());
-        CommandInterface removeCommand = new RemoveCommand(storage);
+        // Vider le contenu de sortie pour le prochain test
+        outContent.reset();
 
-        int result = removeCommand.execute(List.of("Milk"));
+        // Supprimer le fichier
+        DeleteFileCommand deleteCommand = new DeleteFileCommand();
+        result = CommandBus.dispatch(deleteCommand);
+        assertEquals(0, result);
+        assertTrue(outContent.toString().contains("File deleted successfully"));
 
-        assertThat(result).isEqualTo(0);
-        
-        // Verify item was removed
-        ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(outContent));
-        
-        CommandInterface listCommand = new ListCommand(storage);
-        listCommand.execute(List.of());
-        
-        System.setOut(System.out);
-        
-        assertThat(outContent.toString()).doesNotContain("Milk, 10");
-        assertThat(outContent.toString()).contains("Bread, 2");
+        // Vérifier que le fichier a été supprimé
+        assertFalse(Files.exists(tempFilePath));
     }
 
     @Test
-    void should_remove_item_from_csv() throws IOException {
-        Path csvFile = tempDir.resolve("test.csv");
-        Files.writeString(csvFile, "article,nombre,categorie\nMilk,10,default\nBread,2,default");
+    public void testInfo() throws Exception {
+        // Tester la commande info
+        InfoQuery infoQuery = new InfoQuery();
+        int result = QueryBus.dispatch(infoQuery);
+        assertEquals(0, result);
 
-        StorageInterface storage = new CsvStorage(csvFile.toString());
-        CommandInterface removeCommand = new RemoveCommand(storage);
-
-        int result = removeCommand.execute(List.of("Milk"));
-
-        assertThat(result).isEqualTo(0);
-        
-        List<String> lines = Files.readAllLines(csvFile);
-        assertThat(lines).doesNotContain("Milk,10,default");
-        assertThat(lines).contains("article,nombre,categorie", "Bread,2,default");
+        // Vérifier que les informations du système sont affichées
+        String output = outContent.toString();
+        assertTrue(output.contains("Date:"));
+        assertTrue(output.contains("Operating System:"));
+        assertTrue(output.contains("Java Version:"));
     }
 
     @Test
-    void should_list_items_from_json() throws IOException {
-        Path jsonFile = tempDir.resolve("test.json");
-        String jsonContent = """
-                {
-                    "default": ["Milk, 10", "Bread, 2"],
-                    "snacks": ["Chips, 5"]
-                }
-                """;
-        Files.writeString(jsonFile, jsonContent);
+    public void testCommandCreation() throws Exception {
+        // Test des instances de commandes/requêtes correctes
+        AddItemCommand addCommand = new AddItemCommand("Eggs", 12, "dairy");
+        assertEquals("Eggs", addCommand.getItemName());
+        assertEquals(12, addCommand.getQuantity());
+        assertEquals("dairy", addCommand.getCategory());
 
-        StorageInterface storage = new JsonStorage(jsonFile.toString());
-        CommandInterface listCommand = new ListCommand(storage);
+        RemoveItemCommand removeCommand = new RemoveItemCommand("Eggs");
+        assertEquals("Eggs", removeCommand.getItemName());
 
-        ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(outContent));
+        DeleteFileCommand deleteCommand = new DeleteFileCommand();
+        assertNotNull(deleteCommand.getPayload());
 
-        int result = listCommand.execute(List.of());
+        ListItemsQuery listQuery = new ListItemsQuery();
+        assertNotNull(listQuery.getParameters());
 
-        assertThat(result).isEqualTo(0);
-        assertThat(outContent.toString()).contains("# default:", "Milk, 10", "Bread, 2");
-        assertThat(outContent.toString()).contains("# snacks:", "Chips, 5");
-
-        System.setOut(System.out);
-    }
-
-    @Test
-    void should_list_items_from_csv() throws IOException {
-        Path csvFile = tempDir.resolve("test.csv");
-        Files.writeString(csvFile, "article,nombre,categorie\nMilk,10,default\nBread,2,default\nChips,5,snacks");
-
-        StorageInterface storage = new CsvStorage(csvFile.toString());
-        CommandInterface listCommand = new ListCommand(storage);
-
-        ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(outContent));
-
-        int result = listCommand.execute(List.of());
-
-        assertThat(result).isEqualTo(0);
-        assertThat(outContent.toString()).contains("# default:", "Milk, 10", "Bread, 2");
-        assertThat(outContent.toString()).contains("# snacks:", "Chips, 5");
-
-        System.setOut(System.out);
-    }
-
-    @Test
-    void should_delete_json_file() throws IOException {
-        Path jsonFile = tempDir.resolve("test.json");
-        Files.writeString(jsonFile, "{}");
-
-        StorageInterface storage = new JsonStorage(jsonFile.toString());
-        CommandInterface deleteCommand = new DeleteCommand(storage);
-
-        assertThat(Files.exists(jsonFile)).isTrue();
-
-        int result = deleteCommand.execute(List.of());
-
-        assertThat(result).isEqualTo(0);
-        assertThat(Files.exists(jsonFile)).isFalse();
-    }
-
-    @Test
-    void should_delete_csv_file() throws IOException {
-        Path csvFile = tempDir.resolve("test.csv");
-        Files.writeString(csvFile, "article,nombre,categorie");
-
-        StorageInterface storage = new CsvStorage(csvFile.toString());
-        CommandInterface deleteCommand = new DeleteCommand(storage);
-
-        assertThat(Files.exists(csvFile)).isTrue();
-
-        int result = deleteCommand.execute(List.of());
-
-        assertThat(result).isEqualTo(0);
-        assertThat(Files.exists(csvFile)).isFalse();
-    }
-
-    @Test
-    void should_display_info() throws IOException {
-        CommandInterface infoCommand = new InfoCommand();
-
-        ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(outContent));
-
-        int result = infoCommand.execute(List.of());
-
-        assertThat(result).isEqualTo(0);
-        assertThat(outContent.toString()).contains("Date:", "Operating System:", "Java Version:");
-
-        System.setOut(System.out);
-    }
-
-    @Test
-    void should_create_correct_command_via_factory() {
-        CommandInterface command = CommandFactory.createCommand("add", "test.json", "json", "default");
-        assertThat(command).isInstanceOf(AddCommand.class);
-
-        command = CommandFactory.createCommand("list", "test.json", "json", "default");
-        assertThat(command).isInstanceOf(ListCommand.class);
-
-        command = CommandFactory.createCommand("remove", "test.json", "json", "default");
-        assertThat(command).isInstanceOf(RemoveCommand.class);
-
-        command = CommandFactory.createCommand("delete", "test.json", "json", "default");
-        assertThat(command).isInstanceOf(DeleteCommand.class);
-
-        command = CommandFactory.createCommand("info", "test.json", "json", "default");
-        assertThat(command).isInstanceOf(InfoCommand.class);
-
-        command = CommandFactory.createCommand("unknown", "test.json", "json", "default");
-        assertThat(command).isNull();
-    }
-
-    @Test
-    void should_fail_add_without_enough_arguments() throws IOException {
-        StorageInterface storage = new JsonStorage("test.json");
-        CommandInterface addCommand = new AddCommand(storage, "default");
-
-        ByteArrayOutputStream errContent = new ByteArrayOutputStream();
-        System.setErr(new PrintStream(errContent));
-
-        int result = addCommand.execute(List.of("Milk")); // Missing quantity
-
-        assertThat(result).isEqualTo(1);
-        assertThat(errContent.toString()).contains("Missing arguments");
-
-        System.setErr(System.err);
-    }
-
-    @Test
-    void should_fail_add_with_invalid_quantity() throws IOException {
-        StorageInterface storage = new JsonStorage("test.json");
-        CommandInterface addCommand = new AddCommand(storage, "default");
-
-        ByteArrayOutputStream errContent = new ByteArrayOutputStream();
-        System.setErr(new PrintStream(errContent));
-
-        int result = addCommand.execute(List.of("Milk", "abc")); // Invalid quantity
-
-        assertThat(result).isEqualTo(1);
-        assertThat(errContent.toString()).contains("Quantity must be a number");
-
-        System.setErr(System.err);
-    }
-
-    @Test
-    void should_fail_remove_without_arguments() throws IOException {
-        StorageInterface storage = new JsonStorage("test.json");
-        CommandInterface removeCommand = new RemoveCommand(storage);
-
-        ByteArrayOutputStream errContent = new ByteArrayOutputStream();
-        System.setErr(new PrintStream(errContent));
-
-        int result = removeCommand.execute(List.of()); // Missing item name
-
-        assertThat(result).isEqualTo(1);
-        assertThat(errContent.toString()).contains("Missing arguments");
-
-        System.setErr(System.err);
-    }
-
-    @Test
-    void main_should_work_with_valid_arguments() throws IOException {
-        Path jsonFile = tempDir.resolve("test.json");
-        
-        String[] args = {
-            "-s", jsonFile.toString(),
-            "-f", "json",
-            "-c", "default",
-            "add", "Milk", "10"
-        };
-        
-        int result = Main.exec(args);
-        
-        assertThat(result).isEqualTo(0);
-        assertThat(Files.exists(jsonFile)).isTrue();
-        
-        String content = Files.readString(jsonFile);
-        assertThat(content).contains("Milk, 10");
+        InfoQuery infoQuery = new InfoQuery();
+        assertNotNull(infoQuery.getParameters());
     }
 }
